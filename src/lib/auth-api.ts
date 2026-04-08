@@ -6,6 +6,7 @@ export const authApi = {
     name: string;
     email: string;
     password: string;
+    cedula: string;
     phone?: string;
   }): Promise<AuthResponse> => {
     const res = await api.post('/auth/register', data);
