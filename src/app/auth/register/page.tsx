@@ -6,7 +6,7 @@ import Link from "next/link";
 import { authApi } from "@/lib/auth-api";
 import { useAuth } from "@/hooks/useAuth";
 import toast from "react-hot-toast";
-import { Car } from "lucide-react";
+import { Car, CheckCircle, Eye, EyeOff } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -18,16 +18,77 @@ export default function RegisterPage() {
     cedula: "",
     phone: "",
   });
+  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [field]: e.target.value }));
+  // ── Cédula validation state ───────────────────────────────────────────────
+  const [cedulaStatus, setCedulaStatus] = useState<
+    "idle" | "loading" | "valid" | "invalid"
+  >("idle");
+  const [cedulaError, setCedulaError] = useState("");
 
+  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((f) => ({ ...f, [field]: e.target.value }));
+    // Reset cedula state when cedula field changes
+    if (field === "cedula") {
+      setCedulaStatus("idle");
+      setCedulaError("");
+    }
+  };
+
+  // ── Validate cedula on blur ───────────────────────────────────────────────
+  const validateCedula = async () => {
+    const cedula = form.cedula.trim();
+    if (!/^\d{9}$/.test(cedula)) return; // let backend handle format errors
+
+    setCedulaStatus("loading");
+    setCedulaError("");
+
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/cedula/${cedula}`,
+      );
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Backend returns the specific error message (e.g. age restriction)
+        const msg =
+          data?.message ||
+          "Cédula no encontrada o no cumple los requisitos";
+        setCedulaStatus("invalid");
+        setCedulaError(msg);
+        // Clear name in case it was previously autocompleted
+        setForm((f) => ({ ...f, name: "" }));
+        return;
+      }
+
+      // Autocomplete name from padrón
+      const fullName =
+        `${data.name} ${data.firstLastName} ${data.secondLastName}`.trim();
+      setForm((f) => ({ ...f, name: fullName }));
+      setCedulaStatus("valid");
+      toast.success("Cédula verificada ✓");
+    } catch {
+      setCedulaStatus("invalid");
+      setCedulaError("No se pudo verificar la cédula. Intentá de nuevo.");
+      setForm((f) => ({ ...f, name: "" }));
+    }
+  };
+
+  // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!form.name || !form.email || !form.password)
+    if (!form.name || !form.email || !form.password || !form.cedula) {
       return toast.error("Completá los campos requeridos");
-    if (form.password.length < 6)
+    }
+    if (!/^\d{9}$/.test(form.cedula)) {
+      return toast.error("La cédula debe tener exactamente 9 dígitos");
+    }
+    if (cedulaStatus !== "valid") {
+      return toast.error("Debés validar tu cédula antes de continuar");
+    }
+    if (form.password.length < 6) {
       return toast.error("La contraseña debe tener al menos 6 caracteres");
+    }
 
     setLoading(true);
     try {
@@ -47,6 +108,14 @@ export default function RegisterPage() {
       process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
     window.location.href = `${apiUrl}/auth/google`;
   };
+
+  // ── Cedula border color helper ────────────────────────────────────────────
+  const cedulaBorderColor =
+    cedulaStatus === "valid"
+      ? "var(--success)"
+      : cedulaStatus === "invalid"
+        ? "var(--danger)"
+        : undefined;
 
   return (
     <main
@@ -161,66 +230,164 @@ export default function RegisterPage() {
             </span>
           </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="field">
-              <label className="label">Nombre completo *</label>
+          {/* ── Cédula (first so autocomplete fills name) ── */}
+          <div className="field">
+            <label className="label">
+              Número de cédula *{" "}
+              <span style={{ color: "var(--text-3)", fontWeight: 400 }}>
+                (9 dígitos)
+              </span>
+            </label>
+            <div style={{ position: "relative" }}>
               <input
                 className="input"
-                placeholder="Juan Pérez"
-                value={form.name}
-                onChange={set("name")}
-                required
+                placeholder="000000000"
+                value={form.cedula}
+                onChange={set("cedula")}
+                onBlur={validateCedula}
+                maxLength={9}
+                inputMode="numeric"
+                style={{
+                  paddingRight: 40,
+                  borderColor: cedulaBorderColor,
+                }}
               />
+              <div
+                style={{
+                  position: "absolute",
+                  right: 12,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                }}
+              >
+                {cedulaStatus === "loading" && (
+                  <div className="spinner" style={{ width: 16, height: 16 }} />
+                )}
+                {cedulaStatus === "valid" && (
+                  <CheckCircle size={16} color="var(--success)" />
+                )}
+                {cedulaStatus === "invalid" && (
+                  <span style={{ color: "var(--danger)", fontSize: 16 }}>
+                    ✕
+                  </span>
+                )}
+              </div>
             </div>
+            {cedulaStatus === "invalid" && (
+              <p
+                style={{ color: "var(--danger)", fontSize: 12, marginTop: 4 }}
+              >
+                {cedulaError}
+              </p>
+            )}
+            {cedulaStatus === "valid" && (
+              <p
+                style={{ color: "var(--success)", fontSize: 12, marginTop: 4 }}
+              >
+                Cédula válida · nombre autocompleto ✓
+              </p>
+            )}
+          </div>
 
-            <div className="field" style={{ marginTop: 16 }}>
-              <label className="label">Correo electrónico *</label>
+          {/* ── Name (autocompleted from padrón) ── */}
+          <div className="field" style={{ marginTop: 16 }}>
+            <label className="label">
+              Nombre completo *{" "}
+              {cedulaStatus === "valid" && (
+                <span
+                  style={{
+                    color: "var(--success)",
+                    fontSize: 11,
+                    fontWeight: 400,
+                  }}
+                >
+                  autocompleto desde el padrón
+                </span>
+              )}
+            </label>
+            <input
+              className="input"
+              placeholder="Se autocompleta al validar la cédula"
+              value={form.name}
+              onChange={set("name")}
+              style={{
+                borderColor:
+                  cedulaStatus === "valid"
+                    ? "var(--success)"
+                    : undefined,
+              }}
+            />
+          </div>
+
+          {/* ── Email ── */}
+          <div className="field" style={{ marginTop: 16 }}>
+            <label className="label">Correo electrónico *</label>
+            <input
+              className="input"
+              type="email"
+              placeholder="tu@email.com"
+              value={form.email}
+              onChange={set("email")}
+              required
+            />
+          </div>
+
+          {/* ── Password ── */}
+          <div className="field" style={{ marginTop: 16 }}>
+            <label className="label">Contraseña *</label>
+            <div style={{ position: "relative" }}>
               <input
                 className="input"
-                type="email"
-                placeholder="tu@email.com"
-                value={form.email}
-                onChange={set("email")}
-                required
-              />
-            </div>
-
-            <div className="field" style={{ marginTop: 16 }}>
-              <label className="label">Contraseña *</label>
-              <input
-                className="input"
-                type="password"
+                type={showPass ? "text" : "password"}
                 placeholder="Mínimo 6 caracteres"
                 value={form.password}
                 onChange={set("password")}
                 required
                 minLength={6}
+                style={{ paddingRight: 44 }}
               />
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
+                style={{
+                  position: "absolute",
+                  right: 12,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  color: "var(--text-3)",
+                  padding: 0,
+                }}
+              >
+                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
+          </div>
 
-            <div className="field" style={{ marginTop: 16 }}>
-              <label className="label">
-                Teléfono{" "}
-                <span style={{ color: "var(--text-3)" }}>(opcional)</span>
-              </label>
-              <input
-                className="input"
-                placeholder="8888-8888"
-                value={form.phone}
-                onChange={set("phone")}
-              />
-            </div>
+          {/* ── Phone (optional) ── */}
+          <div className="field" style={{ marginTop: 16 }}>
+            <label className="label">
+              Teléfono{" "}
+              <span style={{ color: "var(--text-3)" }}>(opcional)</span>
+            </label>
+            <input
+              className="input"
+              placeholder="8888-8888"
+              value={form.phone}
+              onChange={set("phone")}
+            />
+          </div>
 
-            <button
-              className="btn btn-primary btn-lg"
-              type="button"
-              onClick={handleSubmit}
-              disabled={loading}
-              style={{ width: "100%", marginTop: 24 }}
-            >
-              {loading ? <div className="spinner" /> : "Crear cuenta"}
-            </button>
-          </form>
+          <button
+            className="btn btn-primary btn-lg"
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading || cedulaStatus === "loading"}
+            style={{ width: "100%", marginTop: 24 }}
+          >
+            {loading ? <div className="spinner" /> : "Crear cuenta"}
+          </button>
 
           <div className="divider" />
 
