@@ -8,7 +8,7 @@ export const authApi = {
     password: string;
     cedula: string;
     phone?: string;
-  }): Promise<AuthResponse> => {
+  }): Promise<{ message: string; email: string }> => {
     const res = await api.post('/auth/register', data);
     return res.data;
   },
