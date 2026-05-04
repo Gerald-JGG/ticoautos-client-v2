@@ -1,20 +1,37 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { authApi } from '@/lib/auth-api';
 import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
-import { Car, Eye, EyeOff } from 'lucide-react';
+import { Car, Eye, EyeOff, MailCheck, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Leer query params para mostrar mensajes de verificación
+  useEffect(() => {
+    const verified = searchParams.get('verified');
+    const error = searchParams.get('error');
+    const emailParam = searchParams.get('email');
+
+    if (verified === 'true') {
+      toast.success('¡Cuenta verificada! Ya podés iniciar sesión.');
+      if (emailParam) setEmail(decodeURIComponent(emailParam));
+    } else if (verified === 'false' && error) {
+      toast.error(decodeURIComponent(error));
+    } else if (error === 'google_auth_failed') {
+      toast.error('Error al iniciar sesión con Google. Intentá de nuevo.');
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +43,13 @@ export default function LoginPage() {
       toast.success(`¡Bienvenido, ${user.name.split(' ')[0]}!`);
       router.push('/');
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Credenciales inválidas');
+      const msg = err?.response?.data?.message || 'Credenciales inválidas';
+      // Si la cuenta está pendiente, mostrar mensaje especial
+      if (msg.includes('verificada') || msg.includes('verificación')) {
+        toast.error(msg, { duration: 6000 });
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -56,24 +79,43 @@ export default function LoginPage() {
 
         <div className="card" style={{ padding: 32 }}>
           <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 6 }}>Iniciá sesión</h1>
-          <p style={{ color: 'var(--text-2)', fontSize: 14, marginBottom: 28 }}>Ingresá con tu cuenta para continuar</p>
+          <p style={{ color: 'var(--text-2)', fontSize: 14, marginBottom: 28 }}>
+            Ingresá con tu cuenta para continuar
+          </p>
 
-          {/* Google Login Button */}
+          {/* Banner de cuenta pendiente si viene del registro */}
+          {searchParams.get('registered') === 'true' && (
+            <div style={{
+              background: 'rgba(245,158,11,0.08)',
+              border: '1px solid rgba(245,158,11,0.25)',
+              borderRadius: 8,
+              padding: '14px 16px',
+              marginBottom: 24,
+              display: 'flex',
+              gap: 10,
+              alignItems: 'flex-start',
+            }}>
+              <MailCheck size={18} style={{ color: 'var(--amber)', flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--amber)', marginBottom: 2 }}>
+                  Revisá tu correo
+                </p>
+                <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>
+                  Te enviamos un link de activación. Hacé click en él para poder iniciar sesión.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Google Login */}
           <button
             type="button"
             onClick={handleGoogleLogin}
             className="btn btn-secondary btn-lg"
-            style={{ 
-              width: '100%', 
-              marginBottom: 24,
-              background: 'white',
-              color: '#000',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 12,
-              border: '1px solid #ddd'
+            style={{
+              width: '100%', marginBottom: 24, background: 'white',
+              color: '#000', fontWeight: 600, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', gap: 12, border: '1px solid #ddd',
             }}
           >
             <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
@@ -86,13 +128,7 @@ export default function LoginPage() {
           </button>
 
           <div className="divider" style={{ margin: '24px 0' }}>
-            <span style={{ 
-              position: 'relative', 
-              background: 'var(--bg-2)', 
-              padding: '0 12px', 
-              color: 'var(--text-3)',
-              fontSize: 13
-            }}>
+            <span style={{ position: 'relative', background: 'var(--bg-2)', padding: '0 12px', color: 'var(--text-3)', fontSize: 13 }}>
               o con email
             </span>
           </div>
