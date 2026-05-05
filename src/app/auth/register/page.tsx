@@ -188,7 +188,7 @@ export default function RegisterPage() {
 
           {/* Phone */}
           <div className="field" style={{ marginTop: 16 }}>
-            <label className="label">Teléfono <span style={{ color: "var(--text-3)" }}>(opcional)</span></label>
+            <label className="label">Teléfono <span style={{ color: "var(--text-3)" }}></span></label>
             <input className="input" placeholder="8888-8888" value={form.phone} onChange={set("phone")} />
           </div>
 
